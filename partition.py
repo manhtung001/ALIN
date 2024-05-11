@@ -47,7 +47,8 @@ class GraphPartition:
 
         # Count nodes and edges
         N = len(self.graph.nodes())
-        m = sum([d.get("weight", 1) for u, v, d in self.graph.edges(data=True)])
+        m = sum([d.get("weight", 1)
+                for u, v, d in self.graph.edges(data=True)])
         q0 = 1.0 / (2.0 * m)
 
         # Map node labels to contiguous integers
@@ -58,7 +59,8 @@ class GraphPartition:
         if weight is not None:
             edge_weight = []
             for edge in self.graph.edges:
-                edge_weight.append(torch.linalg.norm(self.x[edge[0]] - self.x[edge[1]]).item())
+                edge_weight.append(torch.linalg.norm(
+                    self.x[edge[0]] - self.x[edge[1]]).item())
             edge_weight = torch.tensor(edge_weight)
             edge_weight -= edge_weight.min()
             edge_weight /= edge_weight.max()
@@ -75,7 +77,8 @@ class GraphPartition:
         communities = {i: frozenset([i]) for i in range(N)}
 
         # Initial modularity and homophily
-        partition = [[label_for_node[x] for x in c] for c in communities.values()]
+        partition = [[label_for_node[x] for x in c]
+                     for c in communities.values()]
         q_cnm = modularity(self.graph, partition)
 
         # Initialize data structures
@@ -96,7 +99,8 @@ class GraphPartition:
         dq_heap = [
             MappedQueue([(-dq, i, j) for j, dq in dq_dict[i].items()]) for i in range(N)
         ]
-        H = MappedQueue([dq_heap[i].heap[0] for i in range(N) if len(dq_heap[i]) > 0])
+        H = MappedQueue([dq_heap[i].heap[0]
+                        for i in range(N) if len(dq_heap[i]) > 0])
 
         # Merge communities until we can't improve modularity
         while len(H) > 1:
@@ -240,15 +244,17 @@ class GraphPartition:
         num_clusters = len(communities)
         while num_clusters > min(n_clusters):
 
-            sorted_communities = sorted(communities, key=lambda c: len(c), reverse=True)
-            partitions[num_clusters] = torch.zeros(self.x.shape[0], dtype=torch.int)
+            sorted_communities = sorted(
+                communities, key=lambda c: len(c), reverse=True)
+            partitions[num_clusters] = torch.zeros(
+                self.x.shape[0], dtype=torch.int)
             for i, com in enumerate(sorted_communities):
                 partitions[num_clusters][com] = i
 
             merge_cost, closest_idx = torch.min(dist, dim=1)
             j = torch.argmin(merge_cost).item()
             i = closest_idx[j].item()
-            
+
             # print(f"merging {i} and {j} with cost {merge_cost[j]}")
             # assert i > j
             if i <= j:
@@ -256,7 +262,6 @@ class GraphPartition:
                 print("________________swapping__________________")
                 print("\n"*5)
                 i, j = j, i  # Swap the values of i and j
-
 
             communities[j].extend(communities[i])
             del communities[i]
@@ -288,7 +293,7 @@ class GraphPartition:
         for com in communities:
             x_com.append(self.x[com].mean(axis=0))
         x_com = torch.stack(x_com, dim=0)
-        
+
         batch_size = 5
         num_samples = x_com.size(0)
         num_batches = (num_samples + batch_size - 1) // batch_size
@@ -304,20 +309,19 @@ class GraphPartition:
         # print(are_equal)
 
         # print("after linkage")
-        
+
         print()
-        
+
         for i in range(len(communities)):
             for j in range(i + 1, len(communities)):
                 ni, nj = len(communities[i]), len(communities[j])
                 n = ni * nj / (ni + nj)
                 linkage[i, j] *= n
                 linkage[j, i] *= n
-        
+
         linkage = linkage.cpu()
         linkage += torch.diag(torch.ones(linkage.shape[0]) * float("Inf"))
 
         if full:
             return linkage, x_com
         return linkage
-

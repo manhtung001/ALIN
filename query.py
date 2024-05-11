@@ -48,23 +48,27 @@ class ActiveLearning:
     def update(self, train_mask):
         self.data.train_mask = train_mask
         self.round += 1
-        
+
     def update_edges(self, train_mask):
         indices = torch.nonzero(train_mask).flatten()
         deleted_edges = torch.tensor(self.data.g.deleted_edges.T)
         edges_to_add_back = torch.tensor([])
-        
+
         for node_selected in indices:
             check_idxes = None
             if node_selected in deleted_edges[0]:
-                check_idxes = (deleted_edges[0] == node_selected).nonzero().squeeze().view(-1)
-            if  node_selected in deleted_edges[1]:
+                check_idxes = (
+                    deleted_edges[0] == node_selected).nonzero().squeeze().view(-1)
+            if node_selected in deleted_edges[1]:
                 if check_idxes is not None:
-                    check_idxes = torch.cat((check_idxes, (deleted_edges[1] == node_selected).nonzero().squeeze().view(-1)), 0)
+                    check_idxes = torch.cat(
+                        (check_idxes, (deleted_edges[1] == node_selected).nonzero().squeeze().view(-1)), 0)
                 else:
-                    check_idxes = (deleted_edges[1] == node_selected).nonzero().squeeze().view(-1)
+                    check_idxes = (
+                        deleted_edges[1] == node_selected).nonzero().squeeze().view(-1)
             if check_idxes is not None:
-                edges_to_add_back = torch.cat((edges_to_add_back, deleted_edges.T[check_idxes]), 0)
+                edges_to_add_back = torch.cat(
+                    (edges_to_add_back, deleted_edges.T[check_idxes]), 0)
                 edges_to_add_back = edges_to_add_back.to(torch.int)
 
         edges_to_add_back = edges_to_add_back.numpy()
@@ -76,29 +80,34 @@ class ActiveLearning:
         edges += edges_to_add_back
         edges += edges_to_add_back_reverse
         edge_index = torch.tensor(edges).t().contiguous()
-        edge_index, _ = coalesce(edge_index, None, self.data.num_nodes, self.data.num_nodes)
-        adj_t = SparseTensor(row=edge_index[0], col=edge_index[1], value=None, sparse_sizes=(self.data.num_nodes, self.data.num_nodes))
+        edge_index, _ = coalesce(
+            edge_index, None, self.data.num_nodes, self.data.num_nodes)
+        adj_t = SparseTensor(row=edge_index[0], col=edge_index[1], value=None, sparse_sizes=(
+            self.data.num_nodes, self.data.num_nodes))
         self.data.adj_t = adj_t
         self.data.g.add_edges_from(edges_to_add_back)
         self.data.adj_t = self.data.adj_t.to(self.args.device)
-        
-        
+
     def caclulate_list_edges_add_back(self, train_mask):
         indices = torch.nonzero(train_mask).flatten()
         deleted_edges = torch.tensor(self.data.g.deleted_edges.T)
         edges_to_add_back = torch.tensor([])
-        
+
         for node_selected in indices:
             check_idxes = None
             if node_selected in deleted_edges[0]:
-                check_idxes = (deleted_edges[0] == node_selected).nonzero().squeeze().view(-1)
-            if  node_selected in deleted_edges[1]:
+                check_idxes = (
+                    deleted_edges[0] == node_selected).nonzero().squeeze().view(-1)
+            if node_selected in deleted_edges[1]:
                 if check_idxes is not None:
-                    check_idxes = torch.cat((check_idxes, (deleted_edges[1] == node_selected).nonzero().squeeze().view(-1)), 0)
+                    check_idxes = torch.cat(
+                        (check_idxes, (deleted_edges[1] == node_selected).nonzero().squeeze().view(-1)), 0)
                 else:
-                    check_idxes = (deleted_edges[1] == node_selected).nonzero().squeeze().view(-1)
+                    check_idxes = (
+                        deleted_edges[1] == node_selected).nonzero().squeeze().view(-1)
             if check_idxes is not None:
-                edges_to_add_back = torch.cat((edges_to_add_back, deleted_edges.T[check_idxes]), 0)
+                edges_to_add_back = torch.cat(
+                    (edges_to_add_back, deleted_edges.T[check_idxes]), 0)
                 edges_to_add_back = edges_to_add_back.to(torch.int)
 
         edges_to_add_back = edges_to_add_back.numpy()
@@ -106,14 +115,14 @@ class ActiveLearning:
         edges_to_add_back_reverse = [(j, i) for i, j in edges_to_add_back]
         edges_to_add_back += edges_to_add_back_reverse
         return edges_to_add_back
-    
+
     def get_arg(self, arg, baseline):
         if baseline in ['ALIN', 'ALINFar']:
             epochs = 230
         else:
             epochs = self.args.epochs
         return epochs, arg.lr, arg.weight_decay
-        
+
     def update_partition(self):
         graph = self.data.g.to_undirected()
         graph_part = GraphPartition(graph, self.data.x, self.data.max_part)
@@ -121,18 +130,20 @@ class ActiveLearning:
         sizes = ([len(com) for com in communities])
         threshold = 1/3
         if min(sizes) * len(sizes) / len(self.data.x) < threshold:
-            self.data.partitions = graph_part.agglomerative_clustering(communities)
+            self.data.partitions = graph_part.agglomerative_clustering(
+                communities)
         else:
-            sorted_communities = sorted(communities, key=lambda c: len(c), reverse=True)
+            sorted_communities = sorted(
+                communities, key=lambda c: len(c), reverse=True)
             self.data.partitions = {}
-            self.data.partitions[len(sizes)] = torch.zeros(self.data.x.shape[0], dtype=torch.int)
+            self.data.partitions[len(sizes)] = torch.zeros(
+                self.data.x.shape[0], dtype=torch.int)
             for i, com in enumerate(sorted_communities):
                 self.data.partitions[len(sizes)][com] = i
-        
-         
+
     def init_clf(self):
         self.clf = deepcopy(self.model).to(self.args.device)
-    
+
     def train(self, baseline, query_i_th, kind_decay):
         if self.retrain:
             self.clf = deepcopy(self.model).to(self.args.device)
@@ -146,26 +157,31 @@ class ActiveLearning:
         folder_log_train = 'log_train_test'
         if not os.path.exists(folder_log_train):
             os.makedirs(folder_log_train)
-        f = open( folder_log_train + '/' + str(baseline) + '_log_train.txt', 'a')
+        f = open(folder_log_train + '/' +
+                 str(baseline) + '_log_train.txt', 'a')
         f.write("query_i_th: " + str(query_i_th) + "\n")
         list_loss_ec = []
         list_loss_nc = []
         list_loss = []
-        
+
         def step_decay(initial_weight, decay_rate, decay_steps, total_epochs, epoch):
             drop = 0.00
             epochs_drop = 80
             return initial_weight * np.power(drop, np.floor((1 + epoch) / epochs_drop))
+
         def exponential_decay(initial_weight, decay_rate, decay_steps, total_epochs, epoch):
             return initial_weight * np.exp(-decay_rate * epoch / decay_steps)
+
         def inverse_time_decay(initial_weight, decay_rate, decay_steps, total_epochs, epoch):
             return initial_weight / (1 + decay_rate * epoch / decay_steps)
+
         def cosine_annealing(initial_weight, decay_rate, decay_steps, total_epochs, epoch):
             return initial_weight * 0.5 * (1 + np.cos(np.pi * epoch / total_epochs))
+
         def custom_decay(initial_weight, decay_rate, decay_steps, total_epochs, epoch):
             x = (epoch / decay_steps) * 0.4
             return initial_weight - initial_weight / (1 + math.exp(-8*x + 85))
-        
+
         decay_rate = 0.1
         decay_steps = 3
         for epoch in range(epochs):
@@ -179,23 +195,31 @@ class ActiveLearning:
             if baseline in ['ALIN', 'ALINFar']:
                 alpha_combine_los = self.args.alpha_combine_los
                 if kind_decay == 'exponential_decay':
-                    alpha_combine_los = exponential_decay(1 - alpha_combine_los, decay_rate, decay_steps, epochs, epoch)
+                    alpha_combine_los = exponential_decay(
+                        1 - alpha_combine_los, decay_rate, decay_steps, epochs, epoch)
                 elif kind_decay == 'inverse_time_decay':
-                    alpha_combine_los = inverse_time_decay(1 - alpha_combine_los, decay_rate, decay_steps, epochs, epoch)
+                    alpha_combine_los = inverse_time_decay(
+                        1 - alpha_combine_los, decay_rate, decay_steps, epochs, epoch)
                 elif kind_decay == 'cosine_annealing':
-                    alpha_combine_los = cosine_annealing(1 - alpha_combine_los, decay_rate, decay_steps, epochs, epoch)
+                    alpha_combine_los = cosine_annealing(
+                        1 - alpha_combine_los, decay_rate, decay_steps, epochs, epoch)
                 alpha_combine_los = 1 - alpha_combine_los
                 edges_current_src = self.data.adj_t.storage._row.clone().tolist()
                 edges_current_dst = self.data.adj_t.storage._col.clone().tolist()
-                edges_current = torch.tensor([edges_current_src, edges_current_dst])
+                edges_current = torch.tensor(
+                    [edges_current_src, edges_current_dst])
                 edges_current_labels = torch.ones(edges_current.shape[1])
                 num_neg_samples = int(edges_current.shape[1])
                 num_nodes = logits.shape[0]
-                train_edges_pos_neg = torch.cat([edges_current, negative_sampling(edges_current, num_nodes, num_neg_samples, method='sparse')], dim=1)
-                train_edges_pos_neg_label = torch.cat([edges_current_labels, torch.zeros(num_neg_samples)], dim=0).to(self.args.device)
-                outs_edge_raw = torch.sum(logits[train_edges_pos_neg[0]] * logits[train_edges_pos_neg[1]], dim=1)
+                train_edges_pos_neg = torch.cat([edges_current, negative_sampling(
+                    edges_current, num_nodes, num_neg_samples, method='sparse')], dim=1)
+                train_edges_pos_neg_label = torch.cat(
+                    [edges_current_labels, torch.zeros(num_neg_samples)], dim=0).to(self.args.device)
+                outs_edge_raw = torch.sum(
+                    logits[train_edges_pos_neg[0]] * logits[train_edges_pos_neg[1]], dim=1)
                 train_edges_pos_neg_label = train_edges_pos_neg_label.float()
-                loss_ec = criterion_ec(outs_edge_raw, train_edges_pos_neg_label)
+                loss_ec = criterion_ec(
+                    outs_edge_raw, train_edges_pos_neg_label)
                 f.write("loss_ec lib: " + str(loss_ec.item()) + "\n")
             else:
                 alpha_combine_los = 1
@@ -204,11 +228,14 @@ class ActiveLearning:
                 alpha_combine_los = 1
                 loss_ec = 0
             softmax_logits = F.softmax(logits, dim=1)
-            neg_log_softmax = -torch.log(softmax_logits[self.data.train_mask, labels[self.data.train_mask]])
+            neg_log_softmax = - \
+                torch.log(
+                    softmax_logits[self.data.train_mask, labels[self.data.train_mask]])
             loss_cross_entropy_manual = torch.mean(neg_log_softmax)
             loss_nc = loss_cross_entropy_manual
             f.write("loss_nc handle: " + str(loss_nc.item()) + "\n")
-            loss = alpha_combine_los * loss_nc + (1 - alpha_combine_los) * loss_ec
+            loss = alpha_combine_los * loss_nc + \
+                (1 - alpha_combine_los) * loss_ec
             f.write("loss: " + str(loss.item()) + "\n")
             f.write("\n")
             if type(loss_ec) == int:
@@ -218,12 +245,11 @@ class ActiveLearning:
             list_loss_nc.append(loss_nc.item())
             list_loss.append(loss.item())
             if self.args.verbose == 2:
-                print('Epoch {:03d}: Training loss: {:.4f}'.format(epoch, loss))
+                print('Epoch {:03d}: Training loss: {:.4f}'.format(
+                    epoch, loss))
             loss.backward()
             optimizer.step()
         return (list_loss_ec, list_loss_nc, list_loss)
-            
-            
 
     def evaluate(self):
         self.clf.eval()
@@ -266,11 +292,13 @@ class ActiveLearning:
             for i in range(self.num_parts):
                 part_id = np.where(partitions == i)[0]
                 x = x_embed[part_id]
-                kmeans = Cluster(n_clusters=1, n_dim=x_embed.shape[1], seed=self.seed, device=self.args.device)
+                kmeans = Cluster(
+                    n_clusters=1, n_dim=x_embed.shape[1], seed=self.seed, device=self.args.device)
                 kmeans.train(x.cpu())
                 inertia = kmeans.get_inertia()
                 part_size.append(inertia)
-            part_size = np.rint(b * np.array(part_size) / sum(part_size)).astype(int)
+            part_size = np.rint(b * np.array(part_size) /
+                                sum(part_size)).astype(int)
             part_size = np.maximum(self.num_centers, part_size)
             i = 0
             while part_size.sum() - b != 0:
@@ -288,7 +316,8 @@ class ActiveLearning:
             part_size = []
             for i in range(self.num_parts):
                 part_size.append(len(np.where(partitions == i)[0]))
-            part_size = np.rint(b * np.array(part_size) / sum(part_size)).astype(int)
+            part_size = np.rint(b * np.array(part_size) /
+                                sum(part_size)).astype(int)
             part_size = np.maximum(self.num_centers, part_size)
             i = 0
             while part_size.sum() - b != 0:
@@ -348,7 +377,8 @@ class Density(ActiveLearning):
         x_embed = self.get_node_representation('embedding').cpu()
 
         # Perform K-Means as approximation
-        kmeans = Cluster(n_clusters=b, n_dim=x_embed.shape[1], seed=self.seed, device=self.args.device)
+        kmeans = Cluster(
+            n_clusters=b, n_dim=x_embed.shape[1], seed=self.seed, device=self.args.device)
         kmeans.train(x_embed)
 
         # Calculate density
@@ -378,7 +408,8 @@ class Uncertainty(ActiveLearning):
 
     def query(self, b):
         logits = self.clf(self.data.x, self.data.adj_t)
-        entropy = -torch.sum(F.softmax(logits, dim=1) * F.log_softmax(logits, dim=1), dim=1)
+        entropy = -torch.sum(F.softmax(logits, dim=1) *
+                             F.log_softmax(logits, dim=1), dim=1)
         entropy[np.where(self.data.train_mask != 0)[0]] = 0
         _, indices = torch.topk(entropy, k=b)
         return indices
@@ -403,7 +434,8 @@ class CoreSetGreedy(ActiveLearning):
         indices = list(np.where(self.data.train_mask != 0)[0])
 
         for i in range(b):
-            dist = metrics.pairwise_distances(embed, embed[indices], metric='euclidean')
+            dist = metrics.pairwise_distances(
+                embed, embed[indices], metric='euclidean')
             min_distances = torch.min(torch.tensor(dist), dim=1)[0]
             new_index = min_distances.argmax()
             indices.append(int(new_index))
@@ -542,7 +574,8 @@ class CoreSetMIP(ActiveLearning):
             results = open(sol_file).read().split('\n')
             results_nodes = filter(lambda x1: 'y' in x1,
                                    filter(lambda x1: '#' not in x1, results))
-            string_to_id = lambda x1: (
+
+            def string_to_id(x1): return (
                 int(x1.split(' ')[0].split('_')[1]),
                 int(x1.split(' ')[1]))
             result_node_ids = map(string_to_id, results_nodes)
@@ -575,8 +608,10 @@ class Degree(ActiveLearning):
         else:
             indice = torch.cat([self.data.adj_t[0].unsqueeze(dim=0),
                                 self.data.adj_t[1].unsqueeze(dim=0)], dim=0)
-            values = torch.ones(self.data.adj_t.shape[1], device=self.args.device)
-            adj = torch.sparse_coo_tensor(indice, values, [self.data.num_nodes, self.data.num_nodes]).to_dense()
+            values = torch.ones(
+                self.data.adj_t.shape[1], device=self.args.device)
+            adj = torch.sparse_coo_tensor(
+                indice, values, [self.data.num_nodes, self.data.num_nodes]).to_dense()
             degree = adj.sum(dim=0)
 
         degree[np.where(self.data.train_mask != 0)[0]] = 0
@@ -621,7 +656,8 @@ class AGE(ActiveLearning):
     def query(self, b):
         # Get entropy
         logits = self.clf(self.data.x, self.data.adj_t)
-        entropy = -torch.sum(F.softmax(logits, dim=1) * F.log_softmax(logits, dim=1), dim=1)
+        entropy = -torch.sum(F.softmax(logits, dim=1) *
+                             F.log_softmax(logits, dim=1), dim=1)
 
         # Get centrality
         page = torch.tensor(list(pagerank(self.data.g).values()),
@@ -631,7 +667,8 @@ class AGE(ActiveLearning):
         x = self.get_node_representation('embedding').cpu()
         N = x.shape[0]
 
-        kmeans = Cluster(n_clusters=b, n_dim=x.shape[1], seed=self.seed, device=self.args.device)
+        kmeans = Cluster(
+            n_clusters=b, n_dim=x.shape[1], seed=self.seed, device=self.args.device)
         kmeans.train(x)
         centers = kmeans.get_centroids()
         label = kmeans.predict(x)
@@ -642,7 +679,8 @@ class AGE(ActiveLearning):
         density = 1 / (1 + dist_map)
 
         # Get percentile
-        percentile = (torch.arange(N, dtype=logits.dtype, device=self.args.device) / N)
+        percentile = (torch.arange(N, dtype=logits.dtype,
+                      device=self.args.device) / N)
         id_sorted = density.argsort(descending=False)
         density[id_sorted] = percentile
         id_sorted = entropy.argsort(descending=False)
@@ -683,16 +721,19 @@ class ClusterBased(ActiveLearning):
         x = self.get_node_representation(self.representation, self.encoder)
 
         # Perform K-Means clustering:
-        kmeans = Cluster(n_clusters=b, n_dim=x.shape[1], seed=self.seed, device=self.args.device)
+        kmeans = Cluster(
+            n_clusters=b, n_dim=x.shape[1], seed=self.seed, device=self.args.device)
         kmeans.train(x.cpu().numpy())
-        centers = torch.tensor(kmeans.get_centroids(), dtype=x.dtype, device=x.device)
+        centers = torch.tensor(kmeans.get_centroids(),
+                               dtype=x.dtype, device=x.device)
 
         # Obtain the centers
         indices = list(np.where(self.data.train_mask != 0)[0])
         for center in centers:
             center = center.to(dtype=x.dtype, device=x.device)
             dist_map = torch.linalg.norm(x - center, dim=1)
-            dist_map[indices] = torch.tensor(np.infty, dtype=dist_map.dtype, device=dist_map.device)
+            dist_map[indices] = torch.tensor(
+                np.infty, dtype=dist_map.dtype, device=dist_map.device)
             idx = int(torch.argmin(dist_map))
             indices.append(idx)
 
@@ -728,7 +769,7 @@ class PartitionBased(ActiveLearning):
         if self.num_parts > self.data.max_part:
             self.num_parts = self.data.max_part
             compensation = self.compensation
-        
+
         partitions = np.array(self.data.partitions[self.num_parts].cpu())
 
         # Get node representations
@@ -739,7 +780,7 @@ class PartitionBased(ActiveLearning):
 
         # Iterate over each partition
         indices = list(np.where(self.data.train_mask != 0)[0])
-        
+
         for i in range(self.num_parts):
             part_id = np.where(partitions == i)[0]
             masked_id = [i for i, x in enumerate(part_id) if x in indices]
@@ -750,16 +791,19 @@ class PartitionBased(ActiveLearning):
                 continue
 
             # Perform K-Means clustering:
-            kmeans = Cluster(n_clusters=n_clusters, n_dim=xi.shape[1], seed=self.seed, device=self.args.device)
+            kmeans = Cluster(
+                n_clusters=n_clusters, n_dim=xi.shape[1], seed=self.seed, device=self.args.device)
             kmeans.train(xi.cpu().numpy())
             centers = kmeans.get_centroids()
 
             # Compensating for the interference across partitions
             dist = None
             if self.compensation > 0:
-                dist_to_center = torch.ones(x.shape[0], dtype=x.dtype, device=x.device) * np.infty
+                dist_to_center = torch.ones(
+                    x.shape[0], dtype=x.dtype, device=x.device) * np.infty
                 for idx in indices:
-                    dist_to_center = torch.minimum(dist_to_center, torch.linalg.norm(x - x[idx], dim=1))
+                    dist_to_center = torch.minimum(
+                        dist_to_center, torch.linalg.norm(x - x[idx], dim=1))
                 dist = dist_to_center[part_id]
 
             # Obtain the centers
@@ -768,12 +812,14 @@ class PartitionBased(ActiveLearning):
                 dist_map = torch.linalg.norm(xi - center, dim=1)
                 if self.compensation > 0:
                     dist_map -= dist * compensation
-                dist_map[masked_id] = torch.tensor(np.infty, dtype=dist_map.dtype, device=dist_map.device)
+                dist_map[masked_id] = torch.tensor(
+                    np.infty, dtype=dist_map.dtype, device=dist_map.device)
                 idx = int(torch.argmin(dist_map))
                 masked_id.append(idx)
                 indices.append(part_id[idx])
         return torch.tensor(indices)
-    
+
+
 class ALIN(ActiveLearning):
     """
     """
@@ -788,8 +834,7 @@ class ALIN(ActiveLearning):
         self.encoder = encoder
         self.initialization = None if initialization != 'k-means++' else initialization
         self.compensation = compensation
-        
-    
+
     def query_first_time(self, b):
         self.num_parts = int(np.ceil(b / self.num_centers))
         compensation = 0
@@ -807,21 +852,25 @@ class ALIN(ActiveLearning):
             n_clusters = part_size[i]
             if n_clusters <= 0:
                 continue
-            kmeans = Cluster(n_clusters=n_clusters, n_dim=xi.shape[1], seed=self.seed, device=self.args.device)
+            kmeans = Cluster(
+                n_clusters=n_clusters, n_dim=xi.shape[1], seed=self.seed, device=self.args.device)
             kmeans.train(xi.cpu().numpy())
             centers = kmeans.get_centroids()
             dist = None
             if self.compensation > 0:
-                dist_to_center = torch.ones(x.shape[0], dtype=x.dtype, device=x.device) * np.infty
+                dist_to_center = torch.ones(
+                    x.shape[0], dtype=x.dtype, device=x.device) * np.infty
                 for idx in indices:
-                    dist_to_center = torch.minimum(dist_to_center, torch.linalg.norm(x - x[idx], dim=1))
+                    dist_to_center = torch.minimum(
+                        dist_to_center, torch.linalg.norm(x - x[idx], dim=1))
                 dist = dist_to_center[part_id]
             for center in centers:
                 center = torch.tensor(center, dtype=x.dtype, device=x.device)
                 dist_map = torch.linalg.norm(xi - center, dim=1)
                 if self.compensation > 0:
                     dist_map -= dist * compensation
-                dist_map[masked_id] = torch.tensor(np.infty, dtype=dist_map.dtype, device=dist_map.device)
+                dist_map[masked_id] = torch.tensor(
+                    np.infty, dtype=dist_map.dtype, device=dist_map.device)
                 idx = int(torch.argmin(dist_map))
                 masked_id.append(idx)
                 indices.append(part_id[idx])
@@ -829,42 +878,35 @@ class ALIN(ActiveLearning):
 
     def query(self, b):
         logits = self.clf(self.data.x, self.data.adj_t)
-        entropy = -torch.sum(F.softmax(logits, dim=1) * F.log_softmax(logits, dim=1), dim=1)
+        entropy = -torch.sum(F.softmax(logits, dim=1) *
+                             F.log_softmax(logits, dim=1), dim=1)
         entropy[np.where(self.data.train_mask != 0)[0]] = 0
         node_score = torch.clone(entropy)
-        node_score_normalized = (node_score - node_score.min()) / (node_score.max() - node_score.min())
-        batch_size = 8192  
+        node_score_normalized = (
+            node_score - node_score.min()) / (node_score.max() - node_score.min())
+        batch_size = 8192
         num_nodes = self.data.num_nodes
         with torch.no_grad():
             logits_t = logits @ logits.t()
             edge_scores = torch.zeros(num_nodes).to(self.args.device)
             for batch_start in range(0, num_nodes, batch_size):
                 batch_end = min(batch_start + batch_size, num_nodes)
-                current_batch = torch.arange(batch_start, batch_end).to(self.args.device)
-                tmp_nodes = torch.arange(num_nodes).to(self.args.device)  # Ensure both tensors are on the same device
-                edges = torch.cartesian_prod(current_batch, tmp_nodes).to(self.args.device)
+                current_batch = torch.arange(
+                    batch_start, batch_end).to(self.args.device)
+                # Ensure both tensors are on the same device
+                tmp_nodes = torch.arange(num_nodes).to(self.args.device)
+                edges = torch.cartesian_prod(
+                    current_batch, tmp_nodes).to(self.args.device)
                 outs_edge = logits_t[edges[:, 0], edges[:, 1]]
-                sum_probs = torch.sum(outs_edge.view(batch_end - batch_start, num_nodes), dim=-1)
+                sum_probs = torch.sum(outs_edge.view(
+                    batch_end - batch_start, num_nodes), dim=-1)
                 edge_scores[batch_start:batch_end] = sum_probs
-            edge_scores -= degree(self.data.adj_t.storage._row, num_nodes, dtype=torch.long)
-            edge_score_normalized = (edge_scores - edge_scores.min()) / (edge_scores.max() - edge_scores.min())
+            edge_scores -= degree(self.data.adj_t.storage._row,
+                                  num_nodes, dtype=torch.long)
+            edge_score_normalized = (
+                edge_scores - edge_scores.min()) / (edge_scores.max() - edge_scores.min())
             edge_score_normalized[self.data.train_mask != 0] = 0
-        score = self.args.gamma_combine*node_score_normalized + (1 - self.args.gamma_combine)*edge_score_normalized
+        score = self.args.gamma_combine*node_score_normalized + \
+            (1 - self.args.gamma_combine)*edge_score_normalized
         _, indices = torch.topk(score, k=b)
         return indices
-                
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
-

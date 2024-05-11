@@ -15,20 +15,20 @@ import os
 if not os.path.exists('report'):
     os.makedirs('report')
     os.makedirs('report/avg')
-        
+
 
 def run(args, PERCENT_TO_DELETE_EDGE, result_to_report, KIND_DECAY):
 
     print('args.dataset:', args.dataset)
     print("PERCENT_TO_DELETE_EDGE:", PERCENT_TO_DELETE_EDGE)
-    
+
     time_start_load_data = time.time()
     # Load dataset
     data_load_once, num_edges_deleted, list_edges_deleted, num_edges = load_data(name=args.dataset,
-                    seed=args.seed,
-                    PERCENT_TO_DELETE_EDGE = PERCENT_TO_DELETE_EDGE,
-                     read=False, 
-                     save=False)
+                                                                                 seed=args.seed,
+                                                                                 PERCENT_TO_DELETE_EDGE=PERCENT_TO_DELETE_EDGE,
+                                                                                 read=False,
+                                                                                 save=False)
     data_load_once = data_load_once.to(args.device)
     time_end_load_data = time.time()
     time_load_data = time_end_load_data - time_start_load_data
@@ -36,14 +36,12 @@ def run(args, PERCENT_TO_DELETE_EDGE, result_to_report, KIND_DECAY):
     print('time_load_data:', time_load_data)
     print('num_edges_deleted:', num_edges_deleted)
     print('len(list_edges_deleted):', len(list_edges_deleted))
-    
 
     for gnn in args.model:
         for baseline in args.baselines:
-            
+
             for budget in args.budget:
                 data = copy.deepcopy(data_load_once)
-                
 
                 budget = int(budget)
                 seed = int(args.seed)
@@ -66,12 +64,11 @@ def run(args, PERCENT_TO_DELETE_EDGE, result_to_report, KIND_DECAY):
                     "activation": args.activation,
                     "batchnorm": args.batchnorm
                 }
-                
 
-                
                 if gnn == "gat":
                     model_args["num_heads"] = args.num_heads
-                    model_args["hidden_channels"] = int(args.hidden / args.num_heads)
+                    model_args["hidden_channels"] = int(
+                        args.hidden / args.num_heads)
                     model = GAT(args.dataset)
                 elif gnn == "gcn":
                     model = GCN(args.dataset)
@@ -81,7 +78,7 @@ def run(args, PERCENT_TO_DELETE_EDGE, result_to_report, KIND_DECAY):
                     raise NotImplemented
 
                 model = model.to(args.device)
-                
+
                 if baseline == "random":
                     agent = Random(data, model, seed, args)
                 elif baseline == "density":
@@ -115,18 +112,16 @@ def run(args, PERCENT_TO_DELETE_EDGE, result_to_report, KIND_DECAY):
                 # Our Methods
                 elif baseline == "ALIN":
                     agent = ALIN(data, model, seed, args,
-                                           representation='aggregation',
-                                           encoder='gcn',
-                                           compensation=0)
-                    
+                                 representation='aggregation',
+                                 encoder='gcn',
+                                 compensation=0)
+
                 elif baseline == "ALINFar":
                     agent = ALIN(data, model, seed, args,
-                                           representation='aggregation',
-                                           encoder='gcn',
-                                           compensation=1)
-                    
-                    
-                    
+                                 representation='aggregation',
+                                 encoder='gcn',
+                                 compensation=1)
+
                 agent.init_clf()
 
                 # Initialization
@@ -134,18 +129,20 @@ def run(args, PERCENT_TO_DELETE_EDGE, result_to_report, KIND_DECAY):
                 training_mask = np.zeros(data.num_nodes, dtype=bool)
                 initial_mask = np.arange(data.num_nodes)
                 np.random.shuffle(initial_mask)
-                
+
                 training_mask = torch.tensor(training_mask)
                 agent.update(training_mask)
-                
+
                 num_budget = args.rounds
 
-                list_budget = [int(budget / num_budget) for i in range(num_budget - 1)]
-                list_budget.append(budget - (num_budget - 1) * int(budget / num_budget))
-                
+                list_budget = [int(budget / num_budget)
+                               for i in range(num_budget - 1)]
+                list_budget.append(budget - (num_budget - 1)
+                                   * int(budget / num_budget))
+
                 budget_first = list_budget[0]
                 list_budget = list_budget[1:]
-                
+
                 # Query 1
                 if baseline in ['ALIN', 'ALINFar']:
                     indices = agent.query_first_time(budget_first)
@@ -153,16 +150,16 @@ def run(args, PERCENT_TO_DELETE_EDGE, result_to_report, KIND_DECAY):
                     indices = initial_mask[:budget_first]
                 else:
                     indices = agent.query(budget_first)
-                
+
                 count_i = 1
-                    
+
                 # Update
                 training_mask[indices] = True
                 print('training_mask query first:', sum(training_mask))
                 agent.update(training_mask)
                 agent.update_edges(training_mask)
                 loss_report = agent.train(baseline, count_i, KIND_DECAY)
-                
+
                 for budget_i in list_budget:
                     count_i += 1
                     indices = agent.query(budget_i)
@@ -170,35 +167,36 @@ def run(args, PERCENT_TO_DELETE_EDGE, result_to_report, KIND_DECAY):
                     agent.update(training_mask)
                     agent.update_edges(training_mask)
                     loss_report = agent.train(baseline, count_i, KIND_DECAY)
-                
+
                 # Evaluate
                 f1, acc = agent.evaluate()
                 labelled = len(np.where(agent.data.train_mask != 0)[0])
 
                 if args.verbose > 0:
-                        print('Labelled nodes: {:d}, Prediction macro-f1 score {:.4f}'
-                              .format(labelled, f1))
+                    print('Labelled nodes: {:d}, Prediction macro-f1 score {:.4f}'
+                          .format(labelled, f1))
                 else:
                     print("{}, {}, {}, {}, Labelled: {}, F1: {}"
-                              .format(gnn, baseline,
-                                      args.dataset, seed,
-                                      labelled, f1))
-                    
+                          .format(gnn, baseline,
+                                  args.dataset, seed,
+                                  labelled, f1))
+
                 if baseline not in result_to_report.keys():
                     result_to_report[baseline] = {}
                 if budget_report not in result_to_report[baseline].keys():
                     result_to_report[baseline][budget_report] = []
                 result_to_report[baseline][budget_report].append(f1)
-                
+
                 if baseline not in loss_to_report.keys():
                     loss_to_report[baseline] = {}
                 if budget_report not in loss_to_report[baseline].keys():
                     loss_to_report[baseline][budget_report] = []
                 loss_to_report[baseline][budget_report].append(loss_report)
-                
+
             print()
-        
+
     return result_to_report, loss_to_report
+
 
 if __name__ == '__main__':
 
@@ -214,16 +212,15 @@ if __name__ == '__main__':
         "--kind_decay", type=str, default='cosine_annealing', help="kind function decay weight")
     parser.add_argument(
         "--budget", type=list, default=[200, 230, 260], help="budget")
-    
+
     parser.add_argument(
         "--rounds", type=int, default=8, help="Number of rounds to run the agent.")
-    
-    
+
     parser.add_argument(
         "--verbose", type=int, default=0, help="Verbose: 0, 1 or 2")
     parser.add_argument(
         "--device", default=torch.device("cuda" if torch.cuda.is_available() else "cpu"))
-    
+
     # General configs
     parser.add_argument(
         "--baselines", type=list, default=['ALINFar'])
@@ -279,7 +276,7 @@ if __name__ == '__main__':
         "--num_heads", type=int, default=8, help="Number of heads.")
 
     args, _ = parser.parse_known_args()
-    
+
     datasets = args.dataset
     baselines = args.baselines
     KIND_GNN = args.model
@@ -294,22 +291,21 @@ if __name__ == '__main__':
         result_to_report = {
         }
         loss_to_report = {}
-        
+
         for seed in range(3):
             args.seed = seed
-            result_to_report, loss_to_report = run(args, PERCENT_TO_DELETE_EDGE, result_to_report, KIND_DECAY)
+            result_to_report, loss_to_report = run(
+                args, PERCENT_TO_DELETE_EDGE, result_to_report, KIND_DECAY)
             print()
-            
-        
+
         print("result_to_report")
         print(result_to_report)
-        
+
         print()
-        
+
         print("loss_to_report")
         print(loss_to_report)
-        
-        
+
         for baseline in baselines:
             print()
             print(baseline)
@@ -322,11 +318,10 @@ if __name__ == '__main__':
                     print()
             except:
                 print("No " + baseline)
-            
+
         result_to_report = pd.DataFrame(result_to_report)
         swapped_df = result_to_report.transpose()
-        swapped_df_percent = swapped_df.applymap(lambda x: [round(val * 100, 1) for val in x])
-        swapped_df_percent.to_csv('report/result_{}_{}_{}_{}_{}_{}.csv'.format(dataset, PERCENT_TO_DELETE_EDGE, KIND_GNN, alpha_combine_los, gamma_combine, KIND_DECAY))
-        
-                
-   
+        swapped_df_percent = swapped_df.applymap(
+            lambda x: [round(val * 100, 1) for val in x])
+        swapped_df_percent.to_csv('report/result_{}_{}_{}_{}_{}_{}.csv'.format(
+            dataset, PERCENT_TO_DELETE_EDGE, KIND_GNN, alpha_combine_los, gamma_combine, KIND_DECAY))

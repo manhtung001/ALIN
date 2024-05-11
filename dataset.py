@@ -11,17 +11,16 @@ import networkx as nx
 from partition import GraphPartition
 
 
-def load_data(name="cora", 
-              read=False,           
+def load_data(name="cora",
+              read=False,
               save=False,
               transform=T.ToSparseTensor(),
               seed=0,
-              PERCENT_TO_DELETE_EDGE = 0.15,
+              PERCENT_TO_DELETE_EDGE=0.15,
               pre_compute=True, verbose=False):
 
     assert name in ["cora", "pubmed", "citeseer", "corafull",
                     "cs", "physics", 'arxiv']
-    
 
     path = os.path.join("data", name)
     if name == 'cora' or name == 'pubmed' or name == 'citeseer':
@@ -31,14 +30,16 @@ def load_data(name="cora",
     elif name == "cs" or name == "physics":
         dataset = Coauthor(root=path, name=name, transform=transform)
     elif name == 'arxiv':
-        dataset = PygNodePropPredDataset(root=path, name='ogbn-' + name, transform=transform)
+        dataset = PygNodePropPredDataset(
+            root=path, name='ogbn-' + name, transform=transform)
     else:
         raise NotImplemented
 
     data = dataset[0]
     if not hasattr(data, 'num_classes'):
         data.num_classes = dataset.num_classes
-    data.adj_t = data.adj_t.to_symmetric() if not isinstance(data.adj_t, torch.Tensor) else data.adj_t
+    data.adj_t = data.adj_t.to_symmetric() if not isinstance(
+        data.adj_t, torch.Tensor) else data.adj_t
     data.max_part = data.num_classes
 
     try:
@@ -65,45 +66,48 @@ def load_data(name="cora",
             data.params = {'age': [0.1, 0.1, 0.8]}
         else:
             raise NotImplemented
-        
+
         if not hasattr(data, 'g'):
             edges = [(int(i), int(j)) for i, j in zip(data.adj_t.storage._row,
                                                       data.adj_t.storage._col)]
             data.g = nx.Graph()
             data.g.add_edges_from(edges)
-            
+
         random.seed(seed)
-        
+
         num_edges = len(data.g.edges())
         num_edges_to_delete = int(PERCENT_TO_DELETE_EDGE * num_edges)
-        
+
         edges = list(data.g.edges())
         random.shuffle(edges)
         deleted_edges = edges[:num_edges_to_delete]
         data.g.remove_edges_from(deleted_edges)
         deleted_edges = np.array(deleted_edges)
         data.g.deleted_edges = deleted_edges
-        
+
         if read:
             filename = "data/partitions.json"
         else:
             graph = data.g.to_undirected()
             graph_part = GraphPartition(graph, data.x, data.max_part)
-            
+
             communities = graph_part.clauset_newman_moore(weight=None)
             sizes = ([len(com) for com in communities])
             threshold = 1/3
             if min(sizes) * len(sizes) / len(data.x) < threshold:
                 print("if load_data")
-                data.partitions = graph_part.agglomerative_clustering(communities)
+                data.partitions = graph_part.agglomerative_clustering(
+                    communities)
             else:
                 print("else load_data")
-                sorted_communities = sorted(communities, key=lambda c: len(c), reverse=True)
+                sorted_communities = sorted(
+                    communities, key=lambda c: len(c), reverse=True)
                 data.partitions = {}
-                data.partitions[len(sizes)] = torch.zeros(data.x.shape[0], dtype=torch.int)
+                data.partitions[len(sizes)] = torch.zeros(
+                    data.x.shape[0], dtype=torch.int)
                 for i, com in enumerate(sorted_communities):
                     data.partitions[len(sizes)][com] = i
-        
+
         # Convert the networkx graph to PyG format
         edges = list(data.g.edges())
         # Add reverse edges
@@ -114,11 +118,13 @@ def load_data(name="cora",
         edges += edges_reverse
         edges += edges_selfLoop
         edge_index = torch.tensor(edges).t().contiguous()
-        edge_index, _ = coalesce(edge_index, None, data.num_nodes, data.num_nodes)
+        edge_index, _ = coalesce(
+            edge_index, None, data.num_nodes, data.num_nodes)
         # Create the adjacency sparse tensor
-        adj_t = SparseTensor(row=edge_index[0], col=edge_index[1], sparse_sizes=(data.num_nodes, data.num_nodes))
+        adj_t = SparseTensor(row=edge_index[0], col=edge_index[1], sparse_sizes=(
+            data.num_nodes, data.num_nodes))
         data.adj_t = adj_t
-     
+
         if pre_compute:
             feat_dim = data.x.size(1)
             conv = GCNConv(feat_dim, feat_dim, cached=True, bias=False)
@@ -126,9 +132,8 @@ def load_data(name="cora",
             with torch.no_grad():
                 data.aggregated = conv(data.x, data.adj_t)
                 data.aggregated = conv(data.aggregated, data.adj_t)
-        
+
     except UserWarning:
         pass
 
     return data, num_edges_to_delete, deleted_edges, num_edges
-
