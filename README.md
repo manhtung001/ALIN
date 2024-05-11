@@ -1,6 +1,6 @@
 # ALIN
 
-This repository provides a PyTorch implementation for "ALIN: An Active Learning Framework for Incomplete Networks" accepted by UAI 2024(Barcelona, Spain).
+This repository provides a PyTorch implementation for "ALIN: An Active Learning Framework for Incomplete Networks" accepted by UAI 2024 (Barcelona, Spain).
 
 ## Requirements
 
